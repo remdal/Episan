@@ -106,7 +106,7 @@ namespace shader_types
 }
 
 const simd_float4 red = { 1.0, 0.0, 0.0, 1.0 };
-const simd_float4 green = { 0.0, 1.0, 0.0, 1.0 };
+const simd_float4 green = { 1.0, 1.0, 0.0, 1.0 };
 const simd_float4 blue = { 0.0, 0.0, 1.0, 1.0 };
 
 void triangleRedGreenBlue(float radius,
@@ -244,53 +244,39 @@ GameCoordinator::~GameCoordinator()
 {
     for (uint8_t i = 0; i < kMaxFramesInFlight; ++i)
     {
-        if (_pTriangleDataBuffer[i]) { _pTriangleDataBuffer[i]->release(); _pTriangleDataBuffer[i] = nullptr; }
-        if (_pCommandAllocator[i])   { _pCommandAllocator[i]->release();   _pCommandAllocator[i]   = nullptr; }
-        if (_pInstanceDataBuffer[i]) { _pInstanceDataBuffer[i]->release(); _pInstanceDataBuffer[i] = nullptr; }
+        _pTriangleDataBuffer[i]->release();
+        _pCommandAllocator[i]->release();
+        _pInstanceDataBuffer[i]->release();
     }
-
-    if (_pUniformBuffer)          { _pUniformBuffer->release();          _pUniformBuffer = nullptr; }
-    if (_pIndexBuffer)            { _pIndexBuffer->release();            _pIndexBuffer = nullptr; }
-    if (_pVertexDataBuffer)       { _pVertexDataBuffer->release();       _pVertexDataBuffer = nullptr; }
-    if (_pTextureAnimationBuffer) { _pTextureAnimationBuffer->release(); _pTextureAnimationBuffer = nullptr; }
-    if (_pIndexBufferMap)         { _pIndexBufferMap->release();         _pIndexBufferMap = nullptr; }
-    if (_pVertexDataBufferMap)    { _pVertexDataBufferMap->release();    _pVertexDataBufferMap = nullptr; }
-
-    if (_pTexture)                { _pTexture->release();                _pTexture = nullptr; }
-    if (_pSampler)                { _pSampler->release();                _pSampler = nullptr; }
-
-    if (_pDepthStencilState)      { _pDepthStencilState->release();      _pDepthStencilState = nullptr; }
-    if (_pPSO)                    { _pPSO->release();                    _pPSO = nullptr; }
-    if (_pMapPSO)                 { _pMapPSO->release();                 _pMapPSO = nullptr; }
-    if (_pCameraPSO)              { _pCameraPSO->release();              _pCameraPSO = nullptr; }
-    if (_pComputePSO)             { _pComputePSO->release();             _pComputePSO = nullptr; }
-
+    _pUniformBuffer->release();
+    _pIndexBuffer->release();
+    _pVertexDataBuffer->release();
+    _pTextureAnimationBuffer->release();
+    _pIndexBufferMap->release();
+    _pVertexDataBufferMap->release();
+    _pTexture->release();
+    _pSampler->release();
+    _pDepthStencilState->release();
+    _pPSO->release();
+    _pMapPSO->release();
+    _pCameraPSO->release();
+    _pComputePSO->release();
     _pBackbuffer.reset();
     _pUpscaledbuffer.reset();
     _pBackbufferAdapter.reset();
     _pUpscaledbufferAdapter.reset();
     _pUpscaledbufferAdapterP.reset();
     _pPacingEvent.reset();
-
-    if (_pShaderLibrary) { _pShaderLibrary->release(); _pShaderLibrary = nullptr; }
-    if (_pCommandBuffer) { _pCommandBuffer->release(); _pCommandBuffer = nullptr; }
-    if (_pCommandQueue)  { _pCommandQueue->release();  _pCommandQueue  = nullptr; }
-
-    if (_pResidencySet)  { _pResidencySet->release();  _pResidencySet  = nullptr; }
-    if (_pArgumentTable) { _pArgumentTable->release(); _pArgumentTable = nullptr; }
-    if (_sharedEvent)    { _sharedEvent->release();    _sharedEvent    = nullptr; }
-
+    _pShaderLibrary->release();
+    _pCommandBuffer->release();
+    _pCommandQueue->release();
+    _pResidencySet->release();
+    _pArgumentTable->release();
+    _sharedEvent->release();
     _pViewportSizeBuffer->release();
-
     _textureAssets.clear();
-
-    if (_semaphore)
-    {
-        dispatch_release(_semaphore);
-        _semaphore = nullptr;
-    }
-
-    if (_pDevice) { _pDevice->release(); _pDevice = nullptr; }
+    dispatch_release(_semaphore);
+    _pDevice->release();
 }
 
 void GameCoordinator::makeArgumentTable()
@@ -326,7 +312,6 @@ void GameCoordinator::makeResidencySet()
 
     _pCommandQueue->addResidencySet(_pResidencySet);
 //    _pCommandQueue->addResidencySet((CA::MetalLayer *)layer)
-    
     residencySetDescriptor->release();
 }
 
@@ -400,7 +385,6 @@ void GameCoordinator::setCameraAspectRatio(float aspectRatio)
 
 void GameCoordinator::draw( MTK::View* _pView )
 {
-    NS::Error* pError = nullptr;
     NS::AutoreleasePool *pPool = NS::AutoreleasePool::alloc()->init();
 
     _currentFrameIndex += 1;
