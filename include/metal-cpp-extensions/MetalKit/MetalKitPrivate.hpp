@@ -95,7 +95,10 @@ _MTK_PRIVATE_DEF_SEL( currentDrawable,
 					 "currentDrawable" );
 
 _MTK_PRIVATE_DEF_SEL( currentRenderPassDescriptor,
-					 "currentRenderPassDescriptor" );
+                     "currentRenderPassDescriptor" );
+
+_MTK_PRIVATE_DEF_SEL( currentMTL4RenderPassDescriptor,
+					 "currentMTL4RenderPassDescriptor" );
 
 _MTK_PRIVATE_DEF_SEL( device,
 					 "device" );

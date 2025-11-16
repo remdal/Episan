@@ -18,7 +18,6 @@
 #include <QuartzCore/QuartzCore.hpp>
 #include <Metal/Metal.hpp>
 #include <MetalFX/MetalFX.hpp>
-#include <AppKit/AppKit.hpp>
 #include <MetalKit/MetalKit.hpp>
 
 #include <simd/simd.h>
@@ -32,6 +31,7 @@
 #include <thread>
 #include <sys/sysctl.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "RMDLGameCoordinator.hpp"
 
@@ -105,18 +105,53 @@ namespace shader_types
     };
 }
 
-static MTL::Library* newLibraryFromBytecode( const std::vector<uint8_t>& bytecode, MTL::Device* pDevice )
+const simd_float4 red = { 1.0, 0.0, 0.0, 1.0 };
+const simd_float4 green = { 0.0, 1.0, 0.0, 1.0 };
+const simd_float4 blue = { 0.0, 0.0, 1.0, 1.0 };
+
+void triangleRedGreenBlue(float radius,
+                          float rotationInDegrees,
+                          TriangleData *triangleData)
 {
-    NS::Error* pError = nullptr;
-    dispatch_data_t data = dispatch_data_create(bytecode.data(), bytecode.size(), dispatch_get_main_queue(), DISPATCH_DATA_DESTRUCTOR_DEFAULT);
-    MTL::Library* pLib = pDevice->newLibrary(data, &pError);
-    if (!pLib)
-    {
-        printf("Error building Metal library: %s\n", pError->localizedDescription()->utf8String());
-        assert(pLib);
-    }
-    CFRelease(data);
-    return pLib;
+    const float angle0 = (float)rotationInDegrees * M_PI / 180.0f;
+    const float angle1 = angle0 + (2.0f * M_PI  / 3.0f);
+    const float angle2 = angle0 + (4.0f * M_PI  / 3.0f);
+
+    simd_float2 position0 = {
+        30 * cosf(angle0),
+        radius * sinf(angle0)
+    };
+
+    simd_float2 position1 = {
+        radius * cosf(angle1),
+        radius * sinf(angle1)
+    };
+
+    simd_float2 position2 = {
+        radius * cosf(angle2),
+        radius * sinf(angle2)
+    };
+
+    triangleData->vertex0.color = red;
+    triangleData->vertex0.position = position0;
+
+    triangleData->vertex1.color = green;
+    triangleData->vertex1.position = position1;
+
+    triangleData->vertex2.color = blue;
+    triangleData->vertex2.position = position2;
+}
+
+void configureVertexDataForBuffer(long rotationInDegrees,
+                                  void *bufferContents)
+{
+    const short radius = 350;
+    const short angle = rotationInDegrees % 360;
+
+    TriangleData triangleData;
+    triangleRedGreenBlue(radius, (float)angle, &triangleData);
+
+    ft_memcpy(bufferContents, &triangleData, sizeof(TriangleData));
 }
 
 GameCoordinator::GameCoordinator(MTL::Device* pDevice,
@@ -149,8 +184,6 @@ GameCoordinator::GameCoordinator(MTL::Device* pDevice,
     , _edrBias(0)
     , _pPacingEvent(nullptr)
     , _pacingTimeStampIndex(0)
-    , _pPresentPipeline(nullptr)
-    , _pInstancedSpritePipeline(nullptr)
     , _pSampler(nullptr)
     , _pMapPSO(nullptr)
     , _pCameraPSO(nullptr)
@@ -163,6 +196,7 @@ GameCoordinator::GameCoordinator(MTL::Device* pDevice,
     , _animationIndex(0)
     , _pVertexDataBufferMap(nullptr)
     , _pIndexBufferMap(nullptr)
+    , _pViewportSizeBuffer(nullptr)
 {
     printf("GameCoordinator constructor called\n");
 
@@ -188,17 +222,18 @@ GameCoordinator::GameCoordinator(MTL::Device* pDevice,
         _pCommandAllocator[i] = _pDevice->newCommandAllocator();
     }
 
-    makeArgumentTable();
-    makeResidencySet();
-
     _pViewportSize.x = (float)width;
     _pViewportSize.y = (float)height;
     _pViewportSizeBuffer = _pDevice->newBuffer(sizeof(_pViewportSize), MTL::ResourceStorageModeShared);
+    ft_memcpy(_pViewportSizeBuffer->contents(), &_pViewportSize, sizeof(_pViewportSize));
+        
+    makeArgumentTable();
+    makeResidencySet();
 
     compileRenderPipeline( _layerPixelFormat, assetSearchPath );
 
     _sharedEvent = _pDevice->newSharedEvent();
-    _sharedEvent->setSignaledValue(_currentFrameIndex); // Is correct? static_cast<uint64_t>
+    _sharedEvent->setSignaledValue(_currentFrameIndex);
 
     _semaphore = dispatch_semaphore_create( kMaxFramesInFlight );
 
@@ -229,14 +264,12 @@ GameCoordinator::~GameCoordinator()
     if (_pMapPSO)                 { _pMapPSO->release();                 _pMapPSO = nullptr; }
     if (_pCameraPSO)              { _pCameraPSO->release();              _pCameraPSO = nullptr; }
     if (_pComputePSO)             { _pComputePSO->release();             _pComputePSO = nullptr; }
-    if (_pPresentPipeline)        { _pPresentPipeline->release();        _pPresentPipeline = nullptr; }
 
     _pBackbuffer.reset();
     _pUpscaledbuffer.reset();
     _pBackbufferAdapter.reset();
     _pUpscaledbufferAdapter.reset();
     _pUpscaledbufferAdapterP.reset();
-    _pSpatialScaler.reset();
     _pPacingEvent.reset();
 
     if (_pShaderLibrary) { _pShaderLibrary->release(); _pShaderLibrary = nullptr; }
@@ -246,6 +279,8 @@ GameCoordinator::~GameCoordinator()
     if (_pResidencySet)  { _pResidencySet->release();  _pResidencySet  = nullptr; }
     if (_pArgumentTable) { _pArgumentTable->release(); _pArgumentTable = nullptr; }
     if (_sharedEvent)    { _sharedEvent->release();    _sharedEvent    = nullptr; }
+
+    _pViewportSizeBuffer->release();
 
     _textureAssets.clear();
 
@@ -363,12 +398,14 @@ void GameCoordinator::setCameraAspectRatio(float aspectRatio)
 {
 }
 
-void GameCoordinator::draw( CA::MetalDrawable* pDrawable, double targetTimestamp )
+void GameCoordinator::draw( MTK::View* _pView )
 {
     NS::Error* pError = nullptr;
     NS::AutoreleasePool *pPool = NS::AutoreleasePool::alloc()->init();
 
     _currentFrameIndex += 1;
+    _frameNumber++;
+    
     const uint32_t frameIndex = _currentFrameIndex % kMaxFramesInFlight;
     std::string label = "Frame: " + std::to_string(_currentFrameIndex);
     
@@ -378,44 +415,58 @@ void GameCoordinator::draw( CA::MetalDrawable* pDrawable, double targetTimestamp
         _pPacingEvent->waitUntilSignaledValue(timeStampToWait, DISPATCH_TIME_FOREVER);
     }
 
-    MTL4::CommandAllocator* pFrameAllocator = _pCommandAllocator[_frameNumber];
+    //MTL::PixelFormat pixelFormat = (MTL::PixelFormat)_pView->colorPixelFormat();
+
+    
+    MTL4::CommandAllocator* pFrameAllocator = _pCommandAllocator[frameIndex];
     pFrameAllocator->reset();
 
     _pCommandBuffer->beginCommandBuffer(pFrameAllocator);
     _pCommandBuffer->setLabel( NS::String::string( label.c_str(), NS::ASCIIStringEncoding ) );
 
-    MTL4::RenderCommandEncoder* pRenderPassEncoder;
-    MTL4::RenderPassDescriptor* pRenderPassDescriptor = MTL4::RenderPassDescriptor::alloc()->init();
+    MTL4::RenderCommandEncoder* renderPassEncoder = nullptr;
+
+    MTL4::RenderPassDescriptor* pRenderPassDescriptor;// = MTL4::RenderPassDescriptor::alloc()->init();
+    pRenderPassDescriptor = _pView->currentMTL4RenderPassDescriptor();
     
-//    MTL::CommandBufferDescriptor* pCommandBufferDescription = MTL::CommandBufferDescriptor::alloc()->init();
-//    _pCommandBuffer = _pCommandQueue->_pDevice->newCommandBuffer(pCommandBufferDescription, &pError);
-//    
-//    
+//    MTL::RenderPassColorAttachmentDescriptor* color0 = pRenderPassDescriptor->colorAttachments()->object(0);
+//    color0->setLoadAction( MTL::LoadActionClear );
+//    color0->setStoreAction( MTL::StoreActionStore );
+//    color0->setClearColor( MTL::ClearColor(0.1, 0.1, 0.1, 1.0) );
 
-    MTL::RenderPassColorAttachmentDescriptor* color0 = pRenderPassDescriptor->colorAttachments()->object(0);
-    color0->setTexture(pDrawable->texture());
-    color0->setLoadAction( MTL::LoadActionClear );
-    color0->setStoreAction( MTL::StoreActionStore );
-    color0->setClearColor( MTL::ClearColor(0.1, 0.1, 0.1, 1.0) );
-//
-//    // Encode a minimal render pass (no draw calls yet)
-//    MTL4::RenderCommandEncoder* pRenderCommandEncoder = _pCommandBuffer->renderCommandEncoder(pRenderPassDescriptor);
-//    pRenderCommandEncoder->setRenderPipelineState(_pPSO);
-//    pRenderCommandEncoder->endEncoding();
-//
-//    // Present and commit
-//    _pCommandBuffer->presentDrawable(pDrawable);
-//    _pCommandBuffer->commit();
-//    id<CAMetalDrawable> currentDrawable = view.currentDrawable;
-//    // Instruct the queue to wait until the drawable is ready to receive output from the render pass.
-//    [commandQueue waitForDrawable:currentDrawable];
-//    // Run the command buffer on the GPU by submitting it the Metal device's queue.
-//    [commandQueue commit:&commandBuffer count:1];
-//    // Notify the drawable that the GPU is done running the render pass.
-//    [commandQueue signalDrawable:currentDrawable];
-//    // Instruct the drawable to show itself on the device's display when the render pass completes.
-//    [currentDrawable present];
+    renderPassEncoder = _pCommandBuffer->renderCommandEncoder(pRenderPassDescriptor);
+    renderPassEncoder->setLabel(NS::String::string(label.c_str(), NS::ASCIIStringEncoding));
 
-//x    pCommandBufferDescription->release();
+    renderPassEncoder->setRenderPipelineState(_pPSO);
+    
+    MTL::Viewport viewPort;
+    viewPort.originX = 0.0;
+    viewPort.originY = 0.0;
+    viewPort.znear = 0.0;
+    viewPort.zfar = 1.0;
+    viewPort.width = (double)_pViewportSize.x;
+    viewPort.height = (double)_pViewportSize.y;
+
+    renderPassEncoder->setViewport(viewPort);
+    
+    configureVertexDataForBuffer(_currentFrameIndex, _pTriangleDataBuffer[frameIndex]->contents());
+    
+    _pArgumentTable->setAddress(_pTriangleDataBuffer[frameIndex]->gpuAddress(), BufferIndexMeshPositions);
+    
+    _pArgumentTable->setAddress(_pViewportSizeBuffer->gpuAddress(), BufferIndexMeshGenerics);
+    
+    renderPassEncoder->setArgumentTable(_pArgumentTable, MTL::RenderStageVertex);
+
+    renderPassEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, NS::UInteger(0), NS::UInteger(3)); // start stop
+    renderPassEncoder->endEncoding();
+
+    _pCommandBuffer->endCommandBuffer();
+
+    CA::MetalDrawable* currentDrawable = _pView->currentDrawable();
+    _pCommandQueue->wait(currentDrawable);
+    _pCommandQueue->commit(&_pCommandBuffer, 1);
+    _pCommandQueue->signalDrawable(currentDrawable);
+    _pCommandQueue->signalEvent(_sharedEvent, _currentFrameIndex);
+    currentDrawable->present();
     pPool->release();
 }

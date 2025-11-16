@@ -97,6 +97,7 @@ namespace MTK
 			void						releaseDrawables() const;
 
 			MTL::RenderPassDescriptor*	currentRenderPassDescriptor() const;
+            MTL4::RenderPassDescriptor* currentMTL4RenderPassDescriptor() const;
 
 			void						setPreferredFramesPerSecond( NS::Integer preferredFramesPerSecond );
 			NS::Integer					preferredFramesPerSecond() const;
@@ -318,7 +319,12 @@ _NS_INLINE void MTK::View::releaseDrawables() const
 
 _NS_INLINE MTL::RenderPassDescriptor* MTK::View::currentRenderPassDescriptor() const
 {
-	return NS::Object::sendMessage< MTL::RenderPassDescriptor* >( this, _MTK_PRIVATE_SEL( currentRenderPassDescriptor ) );
+    return NS::Object::sendMessage< MTL::RenderPassDescriptor* >( this, _MTK_PRIVATE_SEL( currentRenderPassDescriptor ) );
+}
+
+_NS_INLINE MTL4::RenderPassDescriptor* MTK::View::currentMTL4RenderPassDescriptor() const
+{
+	return NS::Object::sendMessage< MTL4::RenderPassDescriptor* >( this, _MTK_PRIVATE_SEL( currentMTL4RenderPassDescriptor ) );
 }
 
 _NS_INLINE void MTK::View::setPreferredFramesPerSecond( NS::Integer preferredFramesPerSecond )

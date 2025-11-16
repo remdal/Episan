@@ -11,11 +11,7 @@
 #ifndef RMDLGAMECOORDINATOR_HPP
 #define RMDLGAMECOORDINATOR_HPP
 
-#include <Foundation/Foundation.hpp>
-#include <QuartzCore/QuartzCore.hpp>
-#include <Metal/Metal.hpp>
-#include <MetalFX/MetalFX.hpp>
-
+#include <MetalKit/MetalKit.hpp>
 #include <string>
 #include <unordered_map>
 
@@ -25,12 +21,12 @@
 #define kMaxBuffersInFlight 3
 static const uint32_t NumLights = 256;
 
-typedef struct TriangleData
+struct TriangleData
 {
     VertexData vertex0;
     VertexData vertex1;
     VertexData vertex2;
-} TriangleData;
+};
 
 class GameCoordinator
 {
@@ -82,8 +78,8 @@ public:
     void buildDepthStencilStates();
     void buildTextures();
     void buildBuffers();
-    void generateMandelbrotTexture( MTL::CommandBuffer* pCommandBuffer );
-    void draw( CA::MetalDrawable* pDrawable, double targetTimestamp );
+//    void generateMandelbrotTexture( MTL::CommandBuffer* pCommandBuffer );
+    void draw( MTK::View* _pView );
     void buildShadersMap();
     void buildBuffersMap();
     
@@ -137,9 +133,9 @@ private:
     NS::SharedPtr<MTL::SharedEvent>     _pPacingEvent;
     uint64_t                            _pacingTimeStampIndex;
 
-    MTL::RenderPipelineState*           _pPresentPipeline;
-    MTL::RenderPipelineState*           _pInstancedSpritePipeline;
-    NS::SharedPtr<MTLFX::SpatialScaler> _pSpatialScaler;
+//    MTL::RenderPipelineState*           _pPresentPipeline;
+//    MTL::RenderPipelineState*           _pInstancedSpritePipeline;
+//    NS::SharedPtr<MTLFX::SpatialScaler> _pSpatialScaler;
 
     // Assets:
     MTL::SamplerState*          _pSampler;

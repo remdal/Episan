@@ -52,3 +52,17 @@ std::vector<uint8_t> readBytecode( const std::string& path )
     }
     return {};
 }
+
+MTL::Library* newLibraryFromBytecode( const std::vector<uint8_t>& bytecode, MTL::Device* pDevice )
+{
+    NS::Error* pError = nullptr;
+    dispatch_data_t data = dispatch_data_create(bytecode.data(), bytecode.size(), dispatch_get_main_queue(), DISPATCH_DATA_DESTRUCTOR_DEFAULT);
+    MTL::Library* pLib = pDevice->newLibrary(data, &pError);
+    if (!pLib)
+    {
+        printf("Error building Metal library: %s\n", pError->localizedDescription()->utf8String());
+        assert(pLib);
+    }
+    CFRelease(data);
+    return pLib;
+}
