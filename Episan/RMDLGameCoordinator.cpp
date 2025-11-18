@@ -39,49 +39,22 @@
 
 #define NUM_ELEMS(arr) (sizeof(arr) / sizeof(arr[0]))
 
-static constexpr size_t kInstanceRows = 10;
-static constexpr size_t kNumInstances = 30;
-static constexpr uint32_t kTextureWidth = 128;
-static constexpr uint32_t kTextureHeight = 128;
-static constexpr uint64_t kPerFrameBumpAllocatorCapacity = 1024;
-
 static constexpr uint32_t kGridWidth = 256;
 static constexpr uint32_t kGridHeight = 256;
 static constexpr uint32_t kCellSize = 4;
 
-static const float cubeVertices[] = {
-    // positions          // colors
-    -1.0f, -1.0f, -1.0f,  1.0f, 0.0f, 0.0f,
-     1.0f, -1.0f, -1.0f,  0.0f, 1.0f, 0.0f,
-     1.0f,  1.0f, -1.0f,  0.0f, 0.0f, 1.0f,
-    -1.0f,  1.0f, -1.0f,  1.0f, 1.0f, 0.0f,
-    -1.0f, -1.0f,  1.0f,  1.0f, 0.0f, 1.0f,
-     1.0f, -1.0f,  1.0f,  0.0f, 1.0f, 1.0f,
-     1.0f,  1.0f,  1.0f,  1.0f, 1.0f, 1.0f,
-    -1.0f,  1.0f,  1.0f,  0.0f, 0.0f, 0.0f
-};
-
-static const uint16_t cubeIndices[] = {
-    0, 1, 2, 2, 3, 0, // front
-    4, 5, 6, 6, 7, 4, // back
-    0, 4, 7, 7, 3, 0, // left
-    1, 5, 6, 6, 2, 1, // right
-    3, 2, 6, 6, 7, 3, // top
-    0, 1, 5, 5, 4, 0  // bottom
-};
-
-static const uint16_t indices[] = {
-    0, 1, 2, 2, 3, 0,
-    4, 5, 6, 6, 7, 4,
-    8, 9, 10, 10, 11, 8,
-    12, 13, 14, 14, 15, 12,
-    16, 17, 18, 18, 19, 16,
-    20, 21, 22, 22, 23, 20,
-};
-
 const simd_float4 red = { 1.0, 0.0, 0.0, 1.0 };
 const simd_float4 green = { 0.0, 1.0, 0.0, 1.0 };
 const simd_float4 blue = { 0.0, 0.0, 1.0, 1.0 };
+
+enum BufferIndexJDLV
+{
+    JDLVBufferIndexGridSource = 0,
+    JDLVBufferIndexGridDest = 1,
+    JDLVBufferIndexState = 2,
+    JDLVBufferIndexViewport = 3,
+    BufferIndexTriangle = 4
+};
 
 void triangleRedGreenBlue(float radius, float rotationInDegrees, TriangleData *triangleData)
 {
@@ -122,7 +95,7 @@ void configureVertexDataForBuffer(long rotationInDegrees, void *bufferContents)
     TriangleData triangleData;
     triangleRedGreenBlue(radius, (float)angle, &triangleData);
 
-    ft_memcpy(bufferContents, &triangleData, sizeof(TriangleData)); // _currentFrameIndex_currentFrameIndex
+    ft_memcpy(bufferContents, &triangleData, sizeof(TriangleData)); // _currentFrameIndex
 }
 
 GameCoordinator::GameCoordinator(MTL::Device* pDevice,
@@ -133,7 +106,7 @@ GameCoordinator::GameCoordinator(MTL::Device* pDevice,
                                  const std::string& assetSearchPath)
     : _pPixelFormat(layerPixelFormat)
     , _pCommandQueue(nullptr)
-    , _pCommandBuffer(nullptr)
+//    , _pCommandBuffer(nullptr)
     , _pArgumentTable(nullptr)
     , _pArgumentTableJDLV(nullptr)
     , _pResidencySet(nullptr)
@@ -164,7 +137,6 @@ GameCoordinator::GameCoordinator(MTL::Device* pDevice,
 
 #pragma mark init
     _pCommandQueue = _pDevice->newMTL4CommandQueue();
-    _pCommandBuffer = _pDevice->newCommandBuffer();
     _pShaderLibrary = _pDevice->newDefaultLibrary();
 
     size_t gridSize = kGridWidth * kGridHeight * sizeof(uint32_t);
@@ -225,7 +197,7 @@ GameCoordinator::~GameCoordinator()
     _pDepthStencilState->release();
     _pPSO->release();
     _pShaderLibrary->release();
-    _pCommandBuffer->release();
+//    _pCommandBuffer->release();
     _pCommandQueue->release();
     _pResidencySet->release();
     _pArgumentTable->release();
@@ -244,20 +216,20 @@ void GameCoordinator::initGrid()
             {0,0,0,0,0,0,0,0,0},
             {0,0,0,0,0,0,0,0,0},
             {0,0,0,0,0,0,0,0,0},
+            {0,0,0,0,0,0,1,0,0},
+            {0,0,0,0,0,0,1,0,0},
+            {0,0,0,0,0,1,1,0,0},
             {0,0,0,0,0,0,0,0,0},
-            {0,0,0,0,0,0,0,0,0},
-            {0,0,0,0,0,0,0,0,0},
-            {0,0,0,0,0,0,0,0,0},
-            {0,0,0,0,0,0,0,0,0},
-            {0,0,0,0,0,0,0,0,0},
-            {0,0,0,0,1,0,0,0,0},
-            {0,0,0,0,1,0,0,0,0},
+            {1,0,0,1,0,1,1,1,0},
+            {0,1,0,0,0,0,0,1,1},
+            {0,0,1,1,1,0,0,0,1},
+            {0,0,0,1,1,1,0,0,0},
             {0,0,0,1,0,1,0,0,0},
             {0,0,0,1,0,1,0,0,0},
             {0,0,0,1,1,1,1,1,0},
-            {0,0,0,0,0,0,0,0,0},
-            {0,0,0,0,0,0,0,0,0},
-            {0,0,0,0,0,0,0,0,0} };
+            {0,0,0,0,0,1,0,0,0},
+            {0,0,0,0,0,1,0,0,0},
+            {0,0,0,1,1,1,0,0,0} };
 
     int startX = kGridWidth / 2 - 4;
     int startY = kGridHeight / 2 - 8;
@@ -282,17 +254,10 @@ void GameCoordinator::buildJDLVPipelines()
     NS::Error* pError = nullptr;
 
     MTL::Function* computeFunction = _pShaderLibrary->newFunction(MTLSTR("JDLVCompute"));
-//    MTL4::LibraryFunctionDescriptor* computeFunction = MTL4::LibraryFunctionDescriptor::alloc()->init();
-//    computeFunction->setName(MTLSTR("JDLVCompute"));
-//    computeFunction->setLibrary(_pShaderLibrary);
     _pJDLVComputePSO = _pDevice->newComputePipelineState(computeFunction, &pError);
     computeFunction->release();
 //    MTL4::ComputePipelineDescriptor* computeDescriptor = MTL4::ComputePipelineDescriptor::alloc()->init();
 //    computeDescriptor->setComputeFunctionDescriptor(computeFunction);
-//    
-//    MTL4::Compiler* compiler = _pDevice->newCompiler( MTL4::CompilerDescriptor::alloc()->init(), &pError );
-//    
-//    _pJDLVComputePSO = compiler->newComputePipelineState(computeDescriptor, nullptr, &pError);
     MTL4::RenderPipelineDescriptor* renderDescriptor = MTL4::RenderPipelineDescriptor::alloc()->init();
     renderDescriptor->setLabel(MTLSTR("JDLV Pipeline"));
     renderDescriptor->colorAttachments()->object(0)->setPixelFormat( MTL::PixelFormatRGBA16Float );
@@ -312,7 +277,7 @@ void GameCoordinator::buildJDLVPipelines()
     _pJDLVRenderPSO = compiler->newRenderPipelineState(renderDescriptor, nullptr, &pError);
 
     MTL4::ArgumentTableDescriptor* computeArgumentTable = MTL4::ArgumentTableDescriptor::alloc()->init();
-    computeArgumentTable->setMaxBufferBindCount(3); // 2? 3?
+    computeArgumentTable->setMaxBufferBindCount(3);
     computeArgumentTable->setLabel( NS::String::string( "p argument table descriptor JDLV", NS::ASCIIStringEncoding ) );
 
     _pArgumentTableJDLV = _pDevice->newArgumentTable(computeArgumentTable, &pError);
@@ -340,7 +305,6 @@ void GameCoordinator::buildJDLVPipelines()
     vertexFunction->release();
     renderDescriptor->release();
 //    computeDescriptor->release();
-    computeFunction->release();
 //    compiler->release();
 }
 
@@ -472,65 +436,66 @@ void GameCoordinator::draw( MTK::View* _pView )
     viewPort.width = (double)_pViewportSize.x;
     viewPort.height = (double)_pViewportSize.y;
 
+    MTL::Viewport viewPortJDLV;
+    viewPortJDLV.originX = 0.0;
+    viewPortJDLV.originY = 0.0;
+    viewPortJDLV.znear = 0.0;
+    viewPortJDLV.zfar = 0.9;
+    viewPortJDLV.width = (double)_pViewportSize.x;
+    viewPortJDLV.height = (double)_pViewportSize.y;
+
     MTL4::CommandAllocator* pFrameAllocator = _pCommandAllocator[frameIndex];
     pFrameAllocator->reset();
 
-    _pCommandBuffer->beginCommandBuffer(pFrameAllocator);
-    _pCommandBuffer->setLabel( NS::String::string( label.c_str(), NS::ASCIIStringEncoding ) );
+    _pCommandBuffer[0] = _pDevice->newCommandBuffer();
+    _pCommandBuffer[0]->beginCommandBuffer(pFrameAllocator);
+    _pCommandBuffer[0]->setLabel( NS::String::string( label.c_str(), NS::ASCIIStringEncoding ) );
 
-    MTL4::RenderCommandEncoder* renderPassEncoder = nullptr;
-
-    MTL4::RenderPassDescriptor* pRenderPassDescriptor;
-    pRenderPassDescriptor = _pView->currentMTL4RenderPassDescriptor();
-    
+    MTL4::RenderPassDescriptor* pRenderPassDescriptor = _pView->currentMTL4RenderPassDescriptor();
 //    MTL::RenderPassColorAttachmentDescriptor* color0 = pRenderPassDescriptor->colorAttachments()->object(0);
 //    color0->setLoadAction( MTL::LoadActionClear );
 //    color0->setStoreAction( MTL::StoreActionStore );
 //    color0->setClearColor( MTL::ClearColor(0.1, 0.1, 0.1, 1.0) );
 
-    renderPassEncoder = _pCommandBuffer->renderCommandEncoder(pRenderPassDescriptor);
+    MTL4::RenderCommandEncoder* renderPassEncoder = _pCommandBuffer[0]->renderCommandEncoder(pRenderPassDescriptor);
     renderPassEncoder->setLabel(NS::String::string(label.c_str(), NS::ASCIIStringEncoding));
-
     renderPassEncoder->setRenderPipelineState(_pPSO);
-
     renderPassEncoder->setViewport(viewPort);
 
     configureVertexDataForBuffer(_currentFrameIndex, _pTriangleDataBuffer[frameIndex]->contents());
     
-    _pArgumentTable->setAddress(_pTriangleDataBuffer[frameIndex]->gpuAddress(), BufferIndexMeshPositions);
-    
-    _pArgumentTable->setAddress(_pViewportSizeBuffer->gpuAddress(), BufferIndexMeshGenerics);
+    _pArgumentTable->setAddress(_pTriangleDataBuffer[frameIndex]->gpuAddress(), 0);
+    _pArgumentTable->setAddress(_pViewportSizeBuffer->gpuAddress(), 1);
     
     renderPassEncoder->setArgumentTable(_pArgumentTable, MTL::RenderStageVertex);
 
     renderPassEncoder->drawPrimitives( MTL::PrimitiveTypeTriangle, NS::UInteger(0), NS::UInteger(3) ); // start stop
     renderPassEncoder->endEncoding();
 
-    _pCommandBuffer->endCommandBuffer();
+    _pCommandBuffer[0]->endCommandBuffer();
 
     /* JDLV */
     MTL4::CommandAllocator* pFrameAllocatorJDLV = _pCommandAllocatorJDLV[frameIndex];
     pFrameAllocatorJDLV->reset();
 
-    _pCommandBuffer->beginCommandBuffer(pFrameAllocatorJDLV);
+    _pCommandBuffer[1] = _pDevice->newCommandBuffer();
+    _pCommandBuffer[1]->beginCommandBuffer(pFrameAllocatorJDLV);
 
     JDLVState* jdlvState = static_cast<JDLVState*>(_pJDLVStateBuffer[frameIndex]->contents());
     jdlvState->width = kGridWidth;
     jdlvState->height = kGridHeight;
     jdlvState->frameCount = _frameNumber;
     jdlvState->time = _frameNumber * 0.016f;
-
     _pJDLVStateBuffer[frameIndex]->didModifyRange( NS::Range(0, sizeof(JDLVState)) ); //crash lldb
-
     MTL::Buffer* sourceGrid = _useBufferAAsSource ? _pGridBuffer_A[frameIndex] : _pGridBuffer_B[frameIndex];
     MTL::Buffer* destGrid = _useBufferAAsSource ? _pGridBuffer_B[frameIndex] : _pGridBuffer_A[frameIndex];
 
-    _pArgumentTableJDLV->setAddress(sourceGrid[frameIndex].gpuAddress(), BufferIndexMeshPositions);
-    _pArgumentTableJDLV->setAddress(destGrid[frameIndex].gpuAddress(), BufferIndexMeshGenerics);
+    _pArgumentTableJDLV->setAddress(sourceGrid->gpuAddress(), 0);
+    _pArgumentTableJDLV->setAddress(destGrid->gpuAddress(), 1);
+    _pArgumentTableJDLV->setAddress(_pJDLVStateBuffer[frameIndex]->gpuAddress(), 2);
+//    renderPassEncoder->setArgumentTable(_pArgumentTableJDLV, MTL::RenderStageVertex);
 
-    renderPassEncoder->setArgumentTable(_pArgumentTableJDLV, MTL::RenderStageVertex);
-
-    MTL4::ComputeCommandEncoder* computeEncoder = _pCommandBuffer->computeCommandEncoder();
+    MTL4::ComputeCommandEncoder* computeEncoder = _pCommandBuffer[1]->computeCommandEncoder();
     computeEncoder->setLabel(MTLSTR("JDLV Compute"));
 
     computeEncoder->setComputePipelineState(_pJDLVComputePSO);
@@ -539,33 +504,44 @@ void GameCoordinator::draw( MTK::View* _pView )
 
     MTL::Size gridSize = MTL::Size(kGridWidth, kGridHeight, 1);
     MTL::Size threadgroupSize = MTL::Size(16, 16, 1);
-    MTL::Size threadgroups = MTL::Size((gridSize.width + threadgroupSize.width - 1) / threadgroupSize.width,
-            (gridSize.height + threadgroupSize.height - 1) / threadgroupSize.height,
-            1);
+    MTL::Size threadgroups = MTL::Size((gridSize.width + threadgroupSize.width - 1) / threadgroupSize.width, (gridSize.height + threadgroupSize.height - 1) / threadgroupSize.height, 1);
 
     computeEncoder->dispatchThreadgroups(threadgroups, threadgroupSize);
     computeEncoder->endEncoding();
 
+    _pCommandBuffer[1]->endCommandBuffer();
+//    MTL4::CommandAllocator* pFrameAllocatorJDLV2 = _pCommandAllocatorJDLV[frameIndex];
+//    pFrameAllocatorJDLV2->reset();
+    _pCommandBuffer[2] = _pDevice->newCommandBuffer();
+    _pCommandBuffer[2]->beginCommandBuffer(pFrameAllocatorJDLV);
+
+    MTL4::RenderCommandEncoder* gridRenderPassEncoder = _pCommandBuffer[2]->renderCommandEncoder(pRenderPassDescriptor);
+
+    gridRenderPassEncoder->setRenderPipelineState(_pJDLVRenderPSO);
+
+    gridRenderPassEncoder->setViewport(viewPortJDLV);
+
     _useBufferAAsSource = !_useBufferAAsSource;
 
-    renderPassEncoder->setArgumentTable(_pArgumentTableJDLV, MTL::RenderStageVertex);
+    _pArgumentTableJDLV->setAddress(destGrid->gpuAddress(), 0);
+    _pArgumentTableJDLV->setAddress(_pJDLVStateBuffer[frameIndex]->gpuAddress(), 1);
+    gridRenderPassEncoder->setArgumentTable(_pArgumentTableJDLV, MTL::RenderStageVertex);
+    gridRenderPassEncoder->setArgumentTable(_pArgumentTableJDLV, MTL::RenderStageFragment);
 
-    renderPassEncoder = _pCommandBuffer->renderCommandEncoder(pRenderPassDescriptor);
+    gridRenderPassEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, NS::UInteger(0), NS::UInteger(6));
+    gridRenderPassEncoder->endEncoding();
 
-    renderPassEncoder->setRenderPipelineState(_pJDLVRenderPSO);
-
-    renderPassEncoder->setViewport(viewPort);
-
-    renderPassEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, NS::UInteger(0), NS::UInteger(6));
-    renderPassEncoder->endEncoding();
-
-    _pCommandBuffer->endCommandBuffer();
+    _pCommandBuffer[2]->endCommandBuffer();
 
     CA::MetalDrawable* currentDrawable = _pView->currentDrawable();
     _pCommandQueue->wait(currentDrawable);
-    _pCommandQueue->commit(&_pCommandBuffer, 2);
+    _pCommandQueue->commit(&_pCommandBuffer[0], 1);
+    _pCommandQueue->commit(&_pCommandBuffer[1], 1);
+    _pCommandQueue->commit(&_pCommandBuffer[2], 1);
     _pCommandQueue->signalDrawable(currentDrawable);
     _pCommandQueue->signalEvent(_sharedEvent, _currentFrameIndex);
+//    pRenderPassDescriptor->release();
+//    pRenderPassDescriptor2->release();
     currentDrawable->present();
     pPool->release();
 }

@@ -188,7 +188,7 @@
 - (void)updateWindowTitle:(nonnull NSWindow *) window
 {
     NSScreen* screen = window.screen;
-    NSString* title = [NSString stringWithFormat:@"Padentvo Metal C++ (%@ @ %ldHz, EDR max: %.2f)", screen.localizedName, (long)screen.maximumFramesPerSecond, screen.maximumExtendedDynamicRangeColorComponentValue];
+    NSString* title = [NSString stringWithFormat:@"Jeu de la Vie Metal4 x C++ (%@ @ %ldHz, EDR max: %.2f)", screen.localizedName, (long)screen.maximumFramesPerSecond, screen.maximumExtendedDynamicRangeColorComponentValue];
     window.title = title;
 }
 

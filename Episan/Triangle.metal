@@ -35,8 +35,8 @@ struct RasterizerData
 /// The vertex shader doesn't modify the color values.
 vertex RasterizerData
 vertexShaderTriangle(uint vertexID [[vertex_id]],
-             constant VertexData *vertexData [[buffer(BufferIndexMeshPositions)]],
-             constant simd_uint2 *viewportSizePointer [[buffer(BufferIndexMeshGenerics)]])
+             constant VertexData *vertexData [[buffer(0)]],
+             constant simd_uint2 *viewportSizePointer [[buffer(1)]])
 {
     RasterizerData out;
 

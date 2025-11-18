@@ -10,32 +10,37 @@ using namespace metal;
 
 #include "RMDLMainRenderer_shared.h"
 
-kernel void JDLVCompute(device const uint* sourceGrid [[buffer(BufferIndexMeshPositions)]],
-                        device uint* destGrid [[buffer(BufferIndexMeshGenerics)]],
-                        constant JDLVState& gameState [[buffer(BufferIndexFrameData)]],
+kernel void JDLVCompute(device const uint* sourceGrid [[buffer(0)]],
+                        device uint* destGrid [[buffer(1)]],
+                        constant JDLVState& gameState [[buffer(2)]],
                         uint2 gid [[thread_position_in_grid]])
 {
     if (gid.x >= gameState.width || gid.y >= gameState.height)
-        return ;
+        return;
 
-    uint32_t index = gid.y * gameState.width + gid.x;
+    uint index = gid.y * gameState.width + gid.x;
 
-    uint32_t liveNeighbors = 0;
-    for (int dy = -1; dy <= 1; dy++)
+    uint liveNeighbors = 0;
+    // Use signed offsets and signed temporaries for neighbor coordinates
+    for (int dy = -1; dy <= 1; ++dy)
     {
-        for (int dx = -1; dx <= 1; dx++)
+        for (int dx = -1; dx <= 1; ++dx)
         {
             if (dx == 0 && dy == 0)
                 continue;
 
-            uint32_t nx = gid.x + dx;
-            uint32_t ny = gid.y + dy;
+            int sx = int(gid.x) + dx;
+            int sy = int(gid.y) + dy;
 
-            if (nx >= 0 && nx < gameState.width && ny >= 0 && ny < gameState.height)
+            if (sx >= 0 && sy >= 0 && sx < int(gameState.width) && sy < int(gameState.height))
             {
-                uint32_t neighborIndex = ny * gameState.width + nx;
+                uint nx = uint(sx);
+                uint ny = uint(sy);
+                uint neighborIndex = ny * gameState.width + nx;
                 if (sourceGrid[neighborIndex] > 0)
-                    liveNeighbors++;
+                {
+                    liveNeighbors += 1;
+                }
             }
         }
     }
@@ -43,11 +48,19 @@ kernel void JDLVCompute(device const uint* sourceGrid [[buffer(BufferIndexMeshPo
     uint currentState = sourceGrid[index];
     uint newState = 0;
 
+    // Conway's Game of Life rules (clamped edges)
     if (currentState == 1)
     {
+        // Survival with 2 or 3 neighbors
         if (liveNeighbors == 2 || liveNeighbors == 3)
             newState = 1;
-        else if (liveNeighbors == 3)
+        else
+            newState = 0;
+    }
+    else
+    {
+        // Birth with exactly 3 neighbors
+        if (liveNeighbors == 3)
             newState = 1;
     }
 
@@ -60,16 +73,17 @@ struct VertexOut
     float2 texCoord;
 };
 
-vertex VertexOut JDLVVertex(constant uint* grid [[buffer(BufferIndexMeshPositions)]],
-                            constant JDLVState& gameState [[buffer(BufferIndexMeshGenerics)]],
+vertex VertexOut JDLVVertex(constant uint* grid [[buffer(0)]],
+                            constant JDLVState& gameState [[buffer(1)]],
                             uint vertexID [[vertex_id]])
 {
     VertexOut out;
 
+    // Fullscreen quad made of two triangles
     float2 positions[6] =
     {
-        float2(-1.0, -1.0), float2(1.0, -1.0), float2(-1.0, 1.0),
-        float2(-1.0, 1.0), float2(1.0, -1.0), float2(1.0, 1.0)
+        float2(-1.0, -1.0), float2( 1.0, -1.0), float2(-1.0,  1.0),
+        float2(-1.0,  1.0), float2( 1.0, -1.0), float2( 1.0,  1.0)
     };
 
     float2 texCoords[6] =
@@ -85,16 +99,27 @@ vertex VertexOut JDLVVertex(constant uint* grid [[buffer(BufferIndexMeshPosition
 }
 
 fragment float4 JDLVFragment(VertexOut in [[stage_in]],
-                             constant uint* grid [[buffer(BufferIndexMeshPositions)]],
-                             constant JDLVState& gameState [[buffer(BufferIndexMeshGenerics)]])
+                             constant uint* grid [[buffer(0)]],
+                             constant JDLVState& gameState [[buffer(1)]])
 {
-    uint x = uint(in.texCoord.x * gameState.width);
-    uint y = uint((1.0 - in.texCoord.y) * gameState.height);
+    // Convert texcoords to integer indices and clamp to valid range
+    float fx = clamp(in.texCoord.x, 0.0f, 0.99999994f); // slightly less than 1.0f
+    float fy = clamp(in.texCoord.y, 0.0f, 0.99999994f);
+
+    uint x = uint(fx * float(gameState.width));
+    // You flipped Y in the original code; keep that convention
+    uint y = uint((1.0f - fy) * float(gameState.height));
+
+    // Extra safety clamp in case of precision edge cases
+    x = min(x, gameState.width  - 1);
+    y = min(y, gameState.height - 1);
+
     uint index = y * gameState.width + x;
 
     uint cellState = grid[index];
 
-    float4 color = cellState > 0 ? float4(1.0, 1.0, 1.0, 1.0) : float4(0.0, 0.0, 0.0, 1.0);
+    float4 color = (cellState > 0) ? float4(1.0, 1.0, 1.0, 1.0)
+                                   : float4(0.0, 0.0, 0.0, 1.0);
 
     return color;
 }
