@@ -126,16 +126,15 @@
 
     _window.contentView = _pMtkView;
 
-    // Instancie le moteur C++ ici (device/pixelFormat/dimensions)
-    MTL::Device* mtlcppDevice = (__bridge MTL::Device *)device;
-    MTL::PixelFormat pixelFormat ;
+    MTL::Device* m_pDevice = (__bridge MTL::Device *)device;
+    MTL::PixelFormat pixelFormat = MTL::PixelFormatRGBA16Float;
     NS::UInteger w = (NS::UInteger)_pMtkView.drawableSize.width;
     NS::UInteger h = (NS::UInteger)_pMtkView.drawableSize.height;
     NSUInteger gameUICanvasSize = 30;
     NSString* shaderPath = NSBundle.mainBundle.resourcePath;
 //        NSString *shaderPath = @"background_general.png";
 
-    _pGameCoordinator = std::make_unique<GameCoordinator>(mtlcppDevice, pixelFormat, w, h, gameUICanvasSize, std::string{""});
+    _pGameCoordinator = std::make_unique<GameCoordinator>(m_pDevice, pixelFormat, w, h, gameUICanvasSize, std::string{""});
 }
 
 - (void)updateDrawableSizeForCurrentWindow
@@ -188,7 +187,7 @@
 - (void)updateWindowTitle:(nonnull NSWindow *) window
 {
     NSScreen* screen = window.screen;
-    NSString* title = [NSString stringWithFormat:@"Jeu de la Vie Metal4 x C++ (%@ @ %ldHz, EDR max: %.2f)", screen.localizedName, (long)screen.maximumFramesPerSecond, screen.maximumExtendedDynamicRangeColorComponentValue];
+    NSString* title = [NSString stringWithFormat:@"Jeu de la Vie Metal4 x C++ (%@ @ %ldHz, EDR max: %.2f) (Ça s'appelle vrmt comme ça)", screen.localizedName, (long)screen.maximumFramesPerSecond, screen.maximumExtendedDynamicRangeColorComponentValue];
     window.title = title;
 }
 

@@ -106,7 +106,7 @@ GameCoordinator::GameCoordinator(MTL::Device* pDevice,
                                  const std::string& assetSearchPath)
     : _pPixelFormat(layerPixelFormat)
     , _pCommandQueue(nullptr)
-//    , _pCommandBuffer(nullptr)
+    , _pCommandBuffer{nullptr}
     , _pArgumentTable(nullptr)
     , _pArgumentTableJDLV(nullptr)
     , _pResidencySet(nullptr)
@@ -165,11 +165,11 @@ GameCoordinator::GameCoordinator(MTL::Device* pDevice,
     _pViewportSize.y = (float)height;
     _pViewportSizeBuffer = _pDevice->newBuffer(sizeof(_pViewportSize), MTL::ResourceStorageModeShared);
     ft_memcpy(_pViewportSizeBuffer->contents(), &_pViewportSize, sizeof(_pViewportSize));
-        
+
     makeArgumentTable();
     makeResidencySet();
 
-    compileRenderPipeline( _pPixelFormat, assetSearchPath );
+    compileRenderPipeline(_pPixelFormat);
 
     _sharedEvent = _pDevice->newSharedEvent();
     _sharedEvent->setSignaledValue(_currentFrameIndex);
@@ -213,23 +213,23 @@ void GameCoordinator::initGrid()
     uint32_t* gridData = static_cast<uint32_t*>(_pGridBuffer_A[0]->contents());
 
     int gunPattern[36][9] = {
-            {0,0,0,0,0,0,0,0,0},
-            {0,0,0,0,0,0,0,0,0},
-            {0,0,0,0,0,0,0,0,0},
-            {0,0,0,0,0,0,1,0,0},
-            {0,0,0,0,0,0,1,0,0},
-            {0,0,0,0,0,1,1,0,0},
-            {0,0,0,0,0,0,0,0,0},
+            {1,0,1,0,1,0,1,1,1},
+            {0,0,1,0,0,0,0,0,0},
+            {0,0,1,0,0,0,0,0,0},
+            {1,1,0,0,0,1,1,0,0},
+            {1,0,0,0,0,0,1,1,0},
+            {1,1,0,0,0,1,1,0,1},
+            {0,1,1,0,0,0,0,0,0},
             {1,0,0,1,0,1,1,1,0},
-            {0,1,0,0,0,0,0,1,1},
-            {0,0,1,1,1,0,0,0,1},
-            {0,0,0,1,1,1,0,0,0},
-            {0,0,0,1,0,1,0,0,0},
-            {0,0,0,1,0,1,0,0,0},
+            {0,1,1,0,0,0,0,1,1},
+            {0,0,1,1,1,0,0,1,1},
+            {0,0,0,1,1,1,0,1,0},
+            {0,0,0,1,0,1,1,1,0},
+            {0,0,0,1,0,1,1,0,1},
             {0,0,0,1,1,1,1,1,0},
-            {0,0,0,0,0,1,0,0,0},
-            {0,0,0,0,0,1,0,0,0},
-            {0,0,0,1,1,1,0,0,0} };
+            {0,0,0,0,0,1,1,1,0},
+            {1,1,0,1,0,1,0,0,0},
+            {1,1,0,1,1,1,1,0,1} };
 
     int startX = kGridWidth / 2 - 4;
     int startY = kGridHeight / 2 - 8;
@@ -344,7 +344,7 @@ void GameCoordinator::makeResidencySet()
     residencySetDescriptor->release();
 }
 
-void GameCoordinator::compileRenderPipeline( MTL::PixelFormat _layerPixelFormat, const std::string& assetSearchPath )
+void GameCoordinator::compileRenderPipeline( MTL::PixelFormat _layerPixelFormat )
 {
     NS::Error* pError= nullptr;
 
@@ -440,7 +440,7 @@ void GameCoordinator::draw( MTK::View* _pView )
     viewPortJDLV.originX = 0.0;
     viewPortJDLV.originY = 0.0;
     viewPortJDLV.znear = 0.0;
-    viewPortJDLV.zfar = 0.9;
+    viewPortJDLV.zfar = 1.0;
     viewPortJDLV.width = (double)_pViewportSize.x;
     viewPortJDLV.height = (double)_pViewportSize.y;
 
@@ -466,15 +466,12 @@ void GameCoordinator::draw( MTK::View* _pView )
     
     _pArgumentTable->setAddress(_pTriangleDataBuffer[frameIndex]->gpuAddress(), 0);
     _pArgumentTable->setAddress(_pViewportSizeBuffer->gpuAddress(), 1);
-    
+
     renderPassEncoder->setArgumentTable(_pArgumentTable, MTL::RenderStageVertex);
-
-    renderPassEncoder->drawPrimitives( MTL::PrimitiveTypeTriangle, NS::UInteger(0), NS::UInteger(3) ); // start stop
+    renderPassEncoder->drawPrimitives( MTL::PrimitiveTypeTriangle, NS::UInteger(0), NS::UInteger(3) );
     renderPassEncoder->endEncoding();
-
     _pCommandBuffer[0]->endCommandBuffer();
 
-    /* JDLV */
     MTL4::CommandAllocator* pFrameAllocatorJDLV = _pCommandAllocatorJDLV[frameIndex];
     pFrameAllocatorJDLV->reset();
 
@@ -484,9 +481,7 @@ void GameCoordinator::draw( MTK::View* _pView )
     JDLVState* jdlvState = static_cast<JDLVState*>(_pJDLVStateBuffer[frameIndex]->contents());
     jdlvState->width = kGridWidth;
     jdlvState->height = kGridHeight;
-    jdlvState->frameCount = _frameNumber;
-    jdlvState->time = _frameNumber * 0.016f;
-    _pJDLVStateBuffer[frameIndex]->didModifyRange( NS::Range(0, sizeof(JDLVState)) ); //crash lldb
+    _pJDLVStateBuffer[frameIndex]->didModifyRange( NS::Range(0, sizeof(JDLVState)) );
     MTL::Buffer* sourceGrid = _useBufferAAsSource ? _pGridBuffer_A[frameIndex] : _pGridBuffer_B[frameIndex];
     MTL::Buffer* destGrid = _useBufferAAsSource ? _pGridBuffer_B[frameIndex] : _pGridBuffer_A[frameIndex];
 
@@ -519,29 +514,27 @@ void GameCoordinator::draw( MTK::View* _pView )
 
     gridRenderPassEncoder->setRenderPipelineState(_pJDLVRenderPSO);
 
-    gridRenderPassEncoder->setViewport(viewPortJDLV);
+    //gridRenderPassEncoder->setViewport(viewPortJDLV);
 
     _useBufferAAsSource = !_useBufferAAsSource;
 
     _pArgumentTableJDLV->setAddress(destGrid->gpuAddress(), 0);
     _pArgumentTableJDLV->setAddress(_pJDLVStateBuffer[frameIndex]->gpuAddress(), 1);
-    gridRenderPassEncoder->setArgumentTable(_pArgumentTableJDLV, MTL::RenderStageVertex);
-    gridRenderPassEncoder->setArgumentTable(_pArgumentTableJDLV, MTL::RenderStageFragment);
+    gridRenderPassEncoder->setArgumentTable( _pArgumentTableJDLV, MTL::RenderStageVertex );
+    gridRenderPassEncoder->setArgumentTable( _pArgumentTableJDLV, MTL::RenderStageFragment );
 
-    gridRenderPassEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, NS::UInteger(0), NS::UInteger(6));
+    gridRenderPassEncoder->drawPrimitives( MTL::PrimitiveTypeTriangle, NS::UInteger(0), NS::UInteger(6) );
     gridRenderPassEncoder->endEncoding();
 
     _pCommandBuffer[2]->endCommandBuffer();
 
     CA::MetalDrawable* currentDrawable = _pView->currentDrawable();
     _pCommandQueue->wait(currentDrawable);
-    _pCommandQueue->commit(&_pCommandBuffer[0], 1);
-    _pCommandQueue->commit(&_pCommandBuffer[1], 1);
-    _pCommandQueue->commit(&_pCommandBuffer[2], 1);
+    _pCommandQueue->commit(_pCommandBuffer, 3);
     _pCommandQueue->signalDrawable(currentDrawable);
     _pCommandQueue->signalEvent(_sharedEvent, _currentFrameIndex);
-//    pRenderPassDescriptor->release();
-//    pRenderPassDescriptor2->release();
     currentDrawable->present();
     pPool->release();
 }
+
+

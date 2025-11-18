@@ -89,7 +89,7 @@ public:
     //MTL::Buffer** buildTriangleDataBuffer(NS::UInteger count);
     void makeArgumentTable();
     void makeResidencySet();
-    void compileRenderPipeline( MTL::PixelFormat, const std::string& );
+    void compileRenderPipeline( MTL::PixelFormat );
 
 private:
     MTL::PixelFormat                    _pPixelFormat;
