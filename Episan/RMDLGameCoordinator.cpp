@@ -137,7 +137,7 @@ GameCoordinator::GameCoordinator(MTL::Device* pDevice,
 
 #pragma mark init
     _pCommandQueue = _pDevice->newMTL4CommandQueue();
-    _pShaderLibrary = _pDevice->newDefaultLibrary();
+    _pShaderLibrary = _pDevice->newDefaultLibrary(); // MTL::Library* MTL::Device::newDefaultLibrary(const NS::Bundle*, NS::Error**)
 
     size_t gridSize = kGridWidth * kGridHeight * sizeof(uint32_t);
     for (uint8_t i = 0; i < kMaxFramesInFlight; i++)
@@ -438,8 +438,8 @@ void GameCoordinator::draw( MTK::View* _pView )
     viewPort.height = (double)_pViewportSize.y;
 
     MTL::Viewport viewPortJDLV;
-    viewPortJDLV.originX = 0.0;
-    viewPortJDLV.originY = 0.0;
+    viewPortJDLV.originX = 1024.0;
+    viewPortJDLV.originY = 768.0;
     viewPortJDLV.znear = 0.0;
     viewPortJDLV.zfar = 1.0;
     viewPortJDLV.width = (double)_pViewportSize.x;
@@ -509,7 +509,7 @@ void GameCoordinator::draw( MTK::View* _pView )
     MTL4::RenderCommandEncoder* gridRenderPassEncoder = _pCommandBuffer[2]->renderCommandEncoder(pRenderPassDescriptor);
 
     gridRenderPassEncoder->setRenderPipelineState(_pJDLVRenderPSO);
-    //gridRenderPassEncoder->setViewport(viewPortJDLV);
+    gridRenderPassEncoder->setViewport(viewPortJDLV);
 
     _pArgumentTableJDLV->setAddress(destGrid->gpuAddress(), 0);
     _pArgumentTableJDLV->setAddress(_pJDLVStateBuffer[frameIndex]->gpuAddress(), 1);

@@ -113,7 +113,7 @@ fragment float4 JDLVFragment(VertexOut in [[stage_in]],
     uint cellState = grid[index];
 
     float4 color = (cellState > 0) ? float4(1.0, 1.0, 1.0, 1.0)
-                                   : float4(0.0, 0.0, 0.0, 1.0);
+                                   : float4(0.0, 0.0, 0.0, 0.0);
 
     return color;
 }

@@ -31,6 +31,16 @@
 		7531E05D2EC8DD02008D177C /* AVFAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFAudio.framework; path = System/Library/Frameworks/AVFAudio.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		758B77492ECE6FED00242ECA /* Exceptions for "include" folder in "Episan" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"metal-cpp/README.md",
+			);
+			target = 7531DF5C2EC8892C008D177C /* Episan */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		7531DF5F2EC8892C008D177C /* Episan */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
@@ -39,6 +49,9 @@
 		};
 		7531E0202EC88981008D177C /* include */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				758B77492ECE6FED00242ECA /* Exceptions for "include" folder in "Episan" target */,
+			);
 			path = include;
 			sourceTree = "<group>";
 		};

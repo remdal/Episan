@@ -260,15 +260,6 @@
     
 }
 
-- (void)keyDown:(NSEvent *)event {
-}
-
-- (void)mouseDown:(NSEvent *)event {
-}
-
-- (void)mouseDragged:(NSEvent *)event {
-}
-
 - (void)mouseUp:(NSEvent *)event {
 }
 
