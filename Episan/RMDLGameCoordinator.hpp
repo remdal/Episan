@@ -104,7 +104,9 @@ private:
     MTL::Device*                        _pDevice;
     MTL::RenderPipelineState*           _pPSO;
     MTL::DepthStencilState*             _pDepthStencilState;
+    MTL::DepthStencilState*             _pDepthStencilStateJDLV;
     MTL::Texture*                       _pTexture;
+    MTL::TextureDescriptor*             _pDepthTextureDesc;
     uint8_t                             _uniformBufferIndex;
     uint64_t                            _currentFrameIndex;
     simd_uint2                          _pViewportSize;

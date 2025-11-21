@@ -124,6 +124,7 @@ GameCoordinator::GameCoordinator(MTL::Device* pDevice,
     , _pJDLVRenderPSO(nullptr)
     , _pJDLVComputePSO(nullptr)
     , _useBufferAAsSource(true)
+    , _pDepthStencilStateJDLV(nullptr)
 {
     printf("GameCoordinator constructor called\n");
 
@@ -159,6 +160,7 @@ GameCoordinator::GameCoordinator(MTL::Device* pDevice,
 
     initGrid();
     buildJDLVPipelines();
+    buildDepthStencilStates();
 
     const NS::UInteger nativeWidth = (NS::UInteger)(width/1.2);
     const NS::UInteger nativeHeight = (NS::UInteger)(height/1.2);
@@ -195,6 +197,7 @@ GameCoordinator::~GameCoordinator()
     _pJDLVRenderPSO->release();
     _pTexture->release();
     _pDepthStencilState->release();
+    _pDepthStencilStateJDLV->release();
     _pPSO->release();
     _pShaderLibrary->release();
 //    _pCommandBuffer->release();
@@ -211,6 +214,34 @@ GameCoordinator::~GameCoordinator()
 void GameCoordinator::resizeMtkView( NS::UInteger width, NS::UInteger height )
 {
     
+}
+
+void GameCoordinator::buildDepthStencilStates()
+{
+    MTL::DepthStencilDescriptor* pDsDesc = MTL::DepthStencilDescriptor::alloc()->init();
+    pDsDesc->setDepthCompareFunction( MTL::CompareFunction::CompareFunctionLess );
+    pDsDesc->setDepthWriteEnabled( false );
+
+    _pDepthStencilStateJDLV = _pDevice->newDepthStencilState( pDsDesc );
+    pDsDesc->release();
+
+
+    MTL::DepthStencilDescriptor* pDsDesct = MTL::DepthStencilDescriptor::alloc()->init();
+    pDsDesct->setDepthCompareFunction( MTL::CompareFunction::CompareFunctionLess );
+    pDsDesct->setDepthWriteEnabled( true );
+
+    _pDepthStencilState = _pDevice->newDepthStencilState( pDsDesct );
+    pDsDesct->release();
+//    MTL::TextureDescriptor* depthDesc =
+//        MTL::TextureDescriptor::texture2DDescriptorWithPixelFormat(
+//            MTL::PixelFormatDepth32Float,
+//            (NSUInteger)_pViewportSize.x,
+//            (NSUInteger)_pViewportSize.y,
+//            false);
+//    depthDesc->setUsage(MTL::TextureUsageRenderTarget);
+//    depthDesc->setStorageMode(MTL::StorageModePrivate);
+//    _pDepthTexture = _pDevice->newTexture(depthDesc);
+//    depthDesc->release();
 }
 
 void GameCoordinator::initGrid()
@@ -433,7 +464,7 @@ void GameCoordinator::draw( MTK::View* _pView )
     viewPort.originX = 0.0;
     viewPort.originY = 0.0;
     viewPort.znear = 0.0;
-    viewPort.zfar = 0.98;
+    viewPort.zfar = 1.0;
     viewPort.width = (double)_pViewportSize.x;
     viewPort.height = (double)_pViewportSize.y;
 
@@ -461,6 +492,7 @@ void GameCoordinator::draw( MTK::View* _pView )
     MTL4::RenderCommandEncoder* renderPassEncoder = _pCommandBuffer[0]->renderCommandEncoder(pRenderPassDescriptor);
     renderPassEncoder->setLabel(NS::String::string(label.c_str(), NS::ASCIIStringEncoding));
     renderPassEncoder->setRenderPipelineState(_pPSO);
+    renderPassEncoder->setDepthStencilState( _pDepthStencilState );
     renderPassEncoder->setViewport(viewPort);
 
     configureVertexDataForBuffer(_currentFrameIndex, _pTriangleDataBuffer[frameIndex]->contents());
@@ -509,6 +541,7 @@ void GameCoordinator::draw( MTK::View* _pView )
     MTL4::RenderCommandEncoder* gridRenderPassEncoder = _pCommandBuffer[2]->renderCommandEncoder(pRenderPassDescriptor);
 
     gridRenderPassEncoder->setRenderPipelineState(_pJDLVRenderPSO);
+    gridRenderPassEncoder->setDepthStencilState( _pDepthStencilStateJDLV );
     gridRenderPassEncoder->setViewport(viewPortJDLV);
 
     _pArgumentTableJDLV->setAddress(destGrid->gpuAddress(), 0);
