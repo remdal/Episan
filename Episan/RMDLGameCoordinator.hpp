@@ -121,6 +121,8 @@ private:
     MTL::RenderPipelineState*   _pJDLVRenderPSO;
     MTL4::ArgumentTable*                _pArgumentTableJDLV;
     bool _useBufferAAsSource;
+    MTL4::RenderPassDescriptor*         _gBufferPassDesc;
+    MTL4::RenderPassDescriptor*         _shadowPassDesc;
         
     void initGrid();
     void buildJDLVPipelines();

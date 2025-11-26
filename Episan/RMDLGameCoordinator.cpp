@@ -95,7 +95,7 @@ void configureVertexDataForBuffer(long rotationInDegrees, void *bufferContents)
     TriangleData triangleData;
     triangleRedGreenBlue(radius, (float)angle, &triangleData);
 
-    ft_memcpy(bufferContents, &triangleData, sizeof(TriangleData)); // _currentFrameIndex
+    ft_memcpy(bufferContents, &triangleData, sizeof(TriangleData));
 }
 
 GameCoordinator::GameCoordinator(MTL::Device* pDevice,
@@ -301,12 +301,11 @@ void GameCoordinator::buildJDLVPipelines()
     MTL4::LibraryFunctionDescriptor* vertexFunction = MTL4::LibraryFunctionDescriptor::alloc()->init();
     vertexFunction->setName(MTLSTR("JDLVVertex"));
     vertexFunction->setLibrary(_pShaderLibrary);
+    renderDescriptor->setVertexFunctionDescriptor(vertexFunction);
 
     MTL4::LibraryFunctionDescriptor* fragmentFunction = MTL4::LibraryFunctionDescriptor::alloc()->init();
     fragmentFunction->setName(MTLSTR("JDLVFragment"));
     fragmentFunction->setLibrary(_pShaderLibrary);
-
-    renderDescriptor->setVertexFunctionDescriptor(vertexFunction);
     renderDescriptor->setFragmentFunctionDescriptor(fragmentFunction);
 
     MTL4::Compiler* compiler = _pDevice->newCompiler( MTL4::CompilerDescriptor::alloc()->init(), &pError );
@@ -371,15 +370,15 @@ void GameCoordinator::makeResidencySet()
     }
     _pResidencySet->addAllocation(_pViewportSizeBuffer);
 
-    //_pResidencySet->commit();
-    //_pCommandQueue->addResidencySet(_pResidencySet); // .get() is for struct
+    _pResidencySet->commit();
+    _pCommandQueue->addResidencySet(_pResidencySet); // .get() is for struct
 //    _pCommandQueue->addResidencySet((CA::MetalLayer *)layer)
     residencySetDescriptor->release();
 }
 
 void GameCoordinator::compileRenderPipeline( MTL::PixelFormat _layerPixelFormat )
 {
-    NS::Error* pError= nullptr;
+    NS::Error* pError = nullptr;
 
     MTL4::Compiler* compiler = _pDevice->newCompiler( MTL4::CompilerDescriptor::alloc()->init(), &pError );
 
@@ -469,18 +468,17 @@ void GameCoordinator::draw( MTK::View* _pView )
     viewPort.height = (double)_pViewportSize.y;
 
     MTL::Viewport viewPortJDLV;
-    viewPortJDLV.originX = 1024.0;
-    viewPortJDLV.originY = 768.0;
+    viewPortJDLV.originX = 0.0;
+    viewPortJDLV.originY = 0.0;
     viewPortJDLV.znear = 0.0;
     viewPortJDLV.zfar = 1.0;
     viewPortJDLV.width = (double)_pViewportSize.x;
     viewPortJDLV.height = (double)_pViewportSize.y;
 
-    MTL4::CommandAllocator* pFrameAllocator = _pCommandAllocator[frameIndex];
-    pFrameAllocator->reset();
+    _pCommandAllocator[frameIndex]->reset();
 
     _pCommandBuffer[0] = _pDevice->newCommandBuffer();
-    _pCommandBuffer[0]->beginCommandBuffer(pFrameAllocator);
+    _pCommandBuffer[0]->beginCommandBuffer(_pCommandAllocator[frameIndex]);
     _pCommandBuffer[0]->setLabel( NS::String::string( label.c_str(), NS::ASCIIStringEncoding ) );
 
     MTL4::RenderPassDescriptor* pRenderPassDescriptor = _pView->currentMTL4RenderPassDescriptor();
@@ -496,7 +494,7 @@ void GameCoordinator::draw( MTK::View* _pView )
     renderPassEncoder->setViewport(viewPort);
 
     configureVertexDataForBuffer(_currentFrameIndex, _pTriangleDataBuffer[frameIndex]->contents());
-    
+
     _pArgumentTable->setAddress(_pTriangleDataBuffer[frameIndex]->gpuAddress(), 0);
     _pArgumentTable->setAddress(_pViewportSizeBuffer->gpuAddress(), 1);
 
@@ -506,7 +504,7 @@ void GameCoordinator::draw( MTK::View* _pView )
     _pCommandBuffer[0]->endCommandBuffer();
 
     _pCommandBuffer[1] = _pDevice->newCommandBuffer();
-    _pCommandBuffer[1]->beginCommandBuffer(pFrameAllocator);
+    _pCommandBuffer[1]->beginCommandBuffer(_pCommandAllocator[frameIndex]);
 
     JDLVState* jdlvState = static_cast<JDLVState*>(_pJDLVStateBuffer[frameIndex]->contents());
     jdlvState->width = kGridWidth;
@@ -536,7 +534,7 @@ void GameCoordinator::draw( MTK::View* _pView )
 
     _pCommandBuffer[1]->endCommandBuffer();
     _pCommandBuffer[2] = _pDevice->newCommandBuffer();
-    _pCommandBuffer[2]->beginCommandBuffer(pFrameAllocator);
+    _pCommandBuffer[2]->beginCommandBuffer(_pCommandAllocator[frameIndex]);
 
     MTL4::RenderCommandEncoder* gridRenderPassEncoder = _pCommandBuffer[2]->renderCommandEncoder(pRenderPassDescriptor);
 
