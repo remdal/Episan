@@ -115,5 +115,12 @@ struct JDLVState
     uint32_t height;
 };
 
+struct TextVertex
+{
+    simd::float2 pos;
+    simd::float2 uv;
+};
+
+
 #endif /* RMDLMAINRENDERER_SHARED_H */
 

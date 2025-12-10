@@ -56,6 +56,43 @@ enum BufferIndexJDLV
     BufferIndexTriangle = 4
 };
 
+void buildTextVertices(const std::string& text,
+                       const FontAtlas& font,
+                       float x, float y,
+                       float size,
+                       std::vector<TextVertex>& out)
+{
+    out.clear();
+
+    float cursor = x;
+
+    for (char c : text)
+    {
+        if (c < g_chars[0] || c > g_chars[kNumCharacters - 1])
+            continue;
+
+        auto& uv = font.charToUVs[c - g_chars[0]];
+
+        float w = size;
+        float h = size;
+
+        TextVertex q[6] =
+        {
+            {{cursor,     y},     uv.sw},
+            {{cursor + w, y},     uv.se},
+            {{cursor + w, y + h}, uv.ne},
+
+            {{cursor,     y},     uv.sw},
+            {{cursor + w, y + h}, uv.ne},
+            {{cursor,     y + h}, uv.nw}
+        };
+
+        out.insert(out.end(), std::begin(q), std::end(q));
+        cursor += w;
+    }
+}
+
+
 void triangleRedGreenBlue(float radius, float rotationInDegrees, TriangleData *triangleData)
 {
     const float angle0 = (float)rotationInDegrees * M_PI / 180.0f;
@@ -156,8 +193,12 @@ GameCoordinator::GameCoordinator(MTL::Device* pDevice,
         ft_memset(_pGridBuffer_B[i]->contents(), 0, gridSize);
         _pGridBuffer_A[i]->didModifyRange( NS::Range(0, gridSize) );
         _pGridBuffer_B[i]->didModifyRange( NS::Range(0, gridSize) );
-    }
 
+        _pTextBuffer[i] = _pDevice->newBuffer(sizeof(TextVertex), MTL::ResourceStorageModeShared);
+        //    auto vbuf = _pDevice->newBuffer(textVertices.data(), textVertices.size() * sizeof(TextVertex),
+        //    ft_memcpy(_pTextVertexBuffer->contents(), textVertices.data(), textVertices.size() * sizeof(TextVertex));
+    }
+    font = newFontAtlas(_pDevice);
     initGrid();
     buildJDLVPipelines();
     buildDepthStencilStates( width, height );
@@ -173,6 +214,7 @@ GameCoordinator::GameCoordinator(MTL::Device* pDevice,
     makeResidencySet();
 
     compileRenderPipeline(_pPixelFormat);
+    createTextPipeline();
 
     _sharedEvent = _pDevice->newSharedEvent();
     _sharedEvent->setSignaledValue(_currentFrameIndex);
@@ -225,9 +267,9 @@ void GameCoordinator::resizeMtkView( NS::UInteger width, NS::UInteger height )
             MTL::PixelFormatDepth32Float,
             width,
             height,
-            false);
-    depthDesc->setUsage(MTL::TextureUsageRenderTarget);
-    depthDesc->setStorageMode(MTL::StorageModePrivate);
+            false );
+    depthDesc->setUsage( MTL::TextureUsageRenderTarget );
+    depthDesc->setStorageMode( MTL::StorageModePrivate );
     _pTexture = _pDevice->newTexture(depthDesc);
     depthDesc->release();
 }
@@ -301,6 +343,59 @@ void GameCoordinator::initGrid()
     }
     _pGridBuffer_A[0]->didModifyRange( NS::Range(0, kGridWidth * kGridHeight * sizeof(uint32_t)) );
 }
+
+void GameCoordinator::createTextPipeline()
+{
+    NS::Error* pError = nullptr;
+
+    NS::SharedPtr<MTL4::RenderPipelineDescriptor> renderDescriptor = NS::TransferPtr( MTL4::RenderPipelineDescriptor::alloc()->init() );
+    renderDescriptor->setLabel(MTLSTR("Text Pipeline"));
+    renderDescriptor->colorAttachments()->object(0)->setPixelFormat( MTL::PixelFormatRGBA16Float );
+
+    NS::SharedPtr<MTL4::LibraryFunctionDescriptor> vertexFunction = NS::TransferPtr( MTL4::LibraryFunctionDescriptor::alloc()->init() );
+    vertexFunction->setName(MTLSTR("textVS"));
+    vertexFunction->setLibrary(_pShaderLibrary);
+    renderDescriptor->setVertexFunctionDescriptor(vertexFunction.get());
+
+    NS::SharedPtr<MTL4::LibraryFunctionDescriptor> fragmentFunction = NS::TransferPtr( MTL4::LibraryFunctionDescriptor::alloc()->init() );
+    fragmentFunction->setName(MTLSTR("textFS"));
+    fragmentFunction->setLibrary(_pShaderLibrary);
+    renderDescriptor->setFragmentFunctionDescriptor(fragmentFunction.get());
+
+    renderDescriptor->colorAttachments()->object(0)->setPixelFormat(MTL::PixelFormatBGRA8Unorm);
+    renderDescriptor->colorAttachments()->object(0)->setBlendingState(MTL4::BlendStateEnabled);
+    renderDescriptor->colorAttachments()->object(0)->setRgbBlendOperation(MTL::BlendOperationAdd);
+    renderDescriptor->colorAttachments()->object(0)->setAlphaBlendOperation(MTL::BlendOperationAdd);
+    renderDescriptor->colorAttachments()->object(0)->setSourceRGBBlendFactor(MTL::BlendFactorSourceAlpha);
+    renderDescriptor->colorAttachments()->object(0)->setDestinationRGBBlendFactor(MTL::BlendFactorOneMinusSourceAlpha);
+
+    NS::SharedPtr<MTL4::Compiler> compiler = NS::TransferPtr(_pDevice->newCompiler( MTL4::CompilerDescriptor::alloc()->init(), &pError ));
+    _pTextPSO = compiler->newRenderPipelineState(renderDescriptor.get(), nullptr, &pError);
+
+    NS::SharedPtr<MTL4::ArgumentTableDescriptor> computeArgumentTable = NS::TransferPtr( MTL4::ArgumentTableDescriptor::alloc()->init() );
+    computeArgumentTable->setMaxBufferBindCount(2);
+//    computeArgumentTable->setMaxTextureBindCount(1);
+    computeArgumentTable->setLabel( NS::String::string( "text argument table descriptor", NS::ASCIIStringEncoding ) );
+
+    _pArgumentTableText = _pDevice->newArgumentTable(computeArgumentTable.get(), &pError);
+
+    NS::SharedPtr<MTL::ResidencySetDescriptor> residencySetDescriptor = NS::TransferPtr( MTL::ResidencySetDescriptor::alloc()->init() );
+    residencySetDescriptor->setLabel( NS::String::string( "text residency set", NS::ASCIIStringEncoding ) );
+
+    _pResidencySet = _pDevice->newResidencySet(residencySetDescriptor.get(), &pError);
+    _pResidencySet->requestResidency();
+
+    for (uint8_t i = 0u; i < kMaxFramesInFlight; ++i)
+    {
+        _pResidencySet->addAllocation(_pTextBuffer[i]);
+    }
+//    _pResidencySet->addAllocation(_pFontTexture);
+
+    _pResidencySet->commit();
+
+    _pCommandQueue->addResidencySet(_pResidencySet);
+}
+
 
 void GameCoordinator::buildJDLVPipelines()
 {
@@ -586,6 +681,40 @@ void GameCoordinator::draw( MTK::View* _pView )
     _pCommandBuffer[2]->endCommandBuffer();
 
     _useBufferAAsSource = !_useBufferAAsSource;
+
+//    _pCommandBuffer[3] = _pDevice->newCommandBuffer();
+//    _pCommandBuffer[3]->beginCommandBuffer(_pCommandAllocator[frameIndex]);
+//
+//    color0->setLoadAction(MTL::LoadActionLoad);
+//    pRenderPassDescriptor->depthAttachment()->setLoadAction(MTL::LoadActionLoad);
+//
+//    MTL4::RenderCommandEncoder* textRenderPassEncoder = _pCommandBuffer[3]->renderCommandEncoder(pRenderPassDescriptor);
+//    textRenderPassEncoder->setRenderPipelineState(_pTextPSO);
+//    textRenderPassEncoder->setViewport(viewPort);
+
+    std::vector<TextVertex> textVerts;
+
+    buildTextVertices("SCORE: 0",
+                          font,
+                          -0.95f,
+                          0.85f,
+                          0.05f,
+                          textVerts);
+
+    MTL::Buffer* textVertexBuffer = _pDevice->newBuffer(
+            textVerts.data(),
+            textVerts.size() * sizeof(TextVertex),
+            MTL::ResourceStorageModeShared
+        );
+//    _pArgumentTableText->setAddress(textVertexBuffer->gpuAddress(), 0);
+//    _pArgumentTableText->setTexture(_pFontTexture->gpuResourceID(), 0);
+//
+//    textRenderPassEncoder->setArgumentTable( _pArgumentTableText, MTL::RenderStageVertex );
+//    textRenderPassEncoder->setArgumentTable( _pArgumentTableText, MTL::RenderStageFragment );
+//
+//    textRenderPassEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, NS::UInteger(0), NS::UInteger(textVerts.size()));
+//    textRenderPassEncoder->endEncoding();
+//    _pCommandBuffer[3]->endCommandBuffer();
 
     CA::MetalDrawable* currentDrawable = _pView->currentDrawable();
     _pCommandQueue->wait(currentDrawable);

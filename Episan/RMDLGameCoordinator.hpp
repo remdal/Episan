@@ -18,6 +18,7 @@
 #include "RMDLMainRenderer_shared.h"
 #include "RMDLCamera.hpp"
 #include "RMDLUtils.hpp"
+#include "RMDLFontLoader.h"
 
 #define kMaxBuffersInFlight 3
 static const uint32_t NumLights = 256;
@@ -75,6 +76,7 @@ public:
 
     void buildShaders();
     void buildComputePipeline();
+    void createTextPipeline();
     void buildDepthStencilStates( NS::UInteger width, NS::UInteger height );
     void buildTextures();
     void buildBuffers();
@@ -92,7 +94,7 @@ public:
 private:
     MTL::PixelFormat                    _pPixelFormat;
     MTL4::CommandQueue*                 _pCommandQueue;
-    MTL4::CommandBuffer*                _pCommandBuffer[3];
+    MTL4::CommandBuffer*                _pCommandBuffer[4];
     MTL4::CommandAllocator*             _pCommandAllocator[kMaxBuffersInFlight];
     MTL4::ArgumentTable*                _pArgumentTable;
     MTL::ResidencySet*                  _pResidencySet;
@@ -113,17 +115,21 @@ private:
     MTL::Library*                       _pShaderLibrary;
     int                                 _frameNumber;
     NS::SharedPtr<MTL::SharedEvent>     _pPacingEvent;
+    FontAtlas font;
 
     MTL::Buffer* _pJDLVStateBuffer[kMaxBuffersInFlight];
     MTL::Buffer* _pGridBuffer_A[kMaxBuffersInFlight];
     MTL::Buffer*            _pGridBuffer_B[kMaxBuffersInFlight];
+    MTL::Buffer*            _pTextBuffer[kMaxBuffersInFlight];
     MTL::ComputePipelineState*  _pJDLVComputePSO;
     MTL::RenderPipelineState*   _pJDLVRenderPSO;
+    MTL::RenderPipelineState*   _pTextPSO;
     MTL4::ArgumentTable*                _pArgumentTableJDLV;
+    MTL4::ArgumentTable*                _pArgumentTableText;
     bool _useBufferAAsSource;
     MTL4::RenderPassDescriptor*         _gBufferPassDesc;
     MTL4::RenderPassDescriptor*         _shadowPassDesc;
-        
+    MTL::Texture* _pFontTexture;
     void initGrid();
     void buildJDLVPipelines();
 
